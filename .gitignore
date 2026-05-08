@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database & Output
+output/
+*.db
+*.db-journal
+*.db-wal
+
+# Assets (generated, keep SVGs only for icons)
+assets/favicon.ico
+assets/icon-*.png
+assets/logo-data-uri.txt
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment
+.env
+*.tmp

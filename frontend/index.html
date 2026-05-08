@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DouTracker - 抖音博主数据面板</title>
+<link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+<link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icon-apple-152.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DouTracker">
+<meta name="theme-color" content="#6366f1">
+<meta name="description" content="抖音博主数据面板 - 多博主管理、视频数据分析、可视化仪表盘">
+<style>
+:root {
+  --bg: #0f1117;
+  --card: #1a1d27;
+  --card-hover: #212433;
+  --border: #2a2d3a;
+  --text: #e1e4ed;
+  --text2: #8b8fa3;
+  --accent: #6366f1;
+  --accent2: #8b5cf6;
+  --green: #22c55e;
+  --red: #ef4444;
+  --orange: #f59e0b;
+  --blue: #3b82f6;
+  --pink: #ec4899;
+  --radius: 10px;
+  --shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; overflow:hidden; }
+a { color:var(--accent); }
+
+/* Sidebar */
+.sidebar {
+  width:260px; min-width:260px; background:var(--card); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; z-index:10;
+}
+.sidebar-header {
+  padding:18px 16px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px;
+}
+.sidebar-header .logo { font-size:22px; }
+.sidebar-header h1 { font-size:15px; font-weight:600; white-space:nowrap; }
+.sidebar-actions { padding:10px 14px; border-bottom:1px solid var(--border); }
+.btn {
+  display:inline-flex; align-items:center; gap:6px; padding:7px 14px;
+  border-radius:6px; border:none; cursor:pointer; font-size:13px; font-weight:500;
+  transition:all .15s; white-space:nowrap;
+}
+.btn-primary { background:var(--accent); color:#fff; width:100%; justify-content:center; }
+.btn-primary:hover { background:#4f46e5; }
+.btn-sm { padding:5px 10px; font-size:12px; }
+.btn-danger { background:var(--red); color:#fff; }
+.btn-danger:hover { background:#dc2626; }
+.btn-outline { background:transparent; border:1px solid var(--border); color:var(--text2); }
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.blogger-list { flex:1; overflow-y:auto; padding:4px 8px; }
+.blogger-item {
+  display:flex; align-items:center; gap:10px; padding:10px;
+  border-radius:8px; cursor:pointer; transition:all .15s;
+  margin-bottom:3px; position:relative;
+}
+.blogger-item:hover { background:var(--card-hover); }
+.blogger-item.active { background:var(--card-hover); border:1px solid var(--accent); }
+.blogger-item img { width:36px; height:36px; border-radius:50%; object-fit:cover; background:var(--border); }
+.blogger-item .info { flex:1; min-width:0; }
+.blogger-item .name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.blogger-item .meta { font-size:11px; color:var(--text2); }
+.blogger-item .del-btn {
+  position:absolute; right:6px; top:50%; transform:translateY(-50%);
+  width:22px; height:22px; border-radius:50%; border:none; background:transparent;
+  color:var(--text2); cursor:pointer; font-size:12px; opacity:0; transition:all .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.blogger-item:hover .del-btn { opacity:1; }
+.blogger-item .del-btn:hover { background:var(--red); color:#fff; }
+
+/* Main */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.toolbar {
+  padding:10px 20px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--card); gap:10px; flex-wrap:wrap;
+}
+.toolbar-left { display:flex; align-items:center; gap:8px; }
+.toolbar-right { display:flex; align-items:center; gap:8px; }
+.toolbar .stat-chip {
+  font-size:12px; padding:4px 10px; border-radius:12px;
+  background:var(--card-hover); border:1px solid var(--border);
+  display:flex; align-items:center; gap:4px;
+}
+.toolbar .stat-chip .val { font-weight:600; color:var(--accent); }
+
+.content { flex:1; overflow-y:auto; padding:16px 20px; }
+
+/* Welcome */
+.welcome { text-align:center; padding:60px 20px; }
+.welcome h2 { font-size:22px; margin-bottom:10px; }
+.welcome p { color:var(--text2); margin-bottom:20px; }
+
+/* Scrape modal */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.6);
+  display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.modal {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  width:500px; max-width:90vw; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.modal h3 { font-size:16px; margin-bottom:16px; }
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:12px; color:var(--text2); margin-bottom:5px; }
+.form-group input, .form-group textarea {
+  width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px;
+  background:var(--bg); color:var(--text); font-size:13px; outline:none;
+  font-family: inherit;
+}
+.form-group input:focus, .form-group textarea:focus { border-color:var(--accent); }
+.form-group textarea { resize:vertical; min-height:80px; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+.progress-bar {
+  height:6px; background:var(--border); border-radius:3px; margin-top:14px; overflow:hidden;
+}
+.progress-fill { height:100%; background:var(--accent); transition:width .3s; }
+
+/* Grid layout - draggable modules */
+.grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); }
+.grid-col2 { grid-template-columns:repeat(2, 1fr); }
+
+.card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px; box-shadow:var(--shadow);
+}
+.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.card-header h3 { font-size:14px; font-weight:500; }
+.card-header .drag-handle { cursor:grab; color:var(--text2); font-size:14px; user-select:none; }
+
+/* Stats row */
+.stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px; }
+.stat-card {
+  background:var(--card); border:1px solid var(--border); border-radius:8px;
+  padding:14px; text-align:center;
+}
+.stat-card .label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+.stat-card .value { font-size:22px; font-weight:700; margin:4px 0; }
+.stat-card .sub { font-size:11px; color:var(--text2); }
+.c-accent { color:var(--accent2); } .c-green { color:var(--green); }
+.c-orange { color:var(--orange); } .c-blue { color:var(--blue); }
+.c-pink { color:var(--pink); }
+
+/* Profile header */
+.profile-header {
+  display:flex; align-items:center; gap:16px; padding:16px; margin-bottom:14px;
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+}
+.profile-header img { width:64px; height:64px; border-radius:50%; object-fit:cover; background:var(--border); }
+.profile-header .info { flex:1; }
+.profile-header .nick { font-size:18px; font-weight:600; }
+.profile-header .verify { font-size:12px; color:var(--text2); margin-top:2px; }
+.profile-header .sig { font-size:13px; color:var(--text2); margin-top:4px; }
+.profile-header .uid { font-size:11px; color:var(--text2); margin-top:2px; }
+
+/* Table */
+.video-table-wrapper { overflow-x:auto; }
+.video-table { width:100%; border-collapse:collapse; font-size:13px; }
+.video-table th {
+  text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);
+  color:var(--text2); font-weight:500; font-size:12px; cursor:pointer;
+  user-select:none; white-space:nowrap;
+}
+.video-table th:hover { color:var(--text); }
+.video-table th .sort-icon { font-size:10px; margin-left:3px; }
+.video-table td {
+  padding:8px 12px; border-bottom:1px solid var(--border);
+  max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.video-table tr:hover td { background:var(--card-hover); }
+.video-table .num { font-weight:600; }
+.video-table .desc-cell { max-width:300px; }
+.video-table .hashtags { font-size:11px; color:var(--accent); }
+
+/* Pagination - REMOVED */
+/* Back to Top button */
+.back-to-top {
+  position: fixed; bottom: 30px; right: 30px; z-index: 999;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; box-shadow: 0 4px 16px rgba(99,102,241,.4);
+  opacity: 0; transform: translateY(20px); pointer-events: none;
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+}
+.back-to-top.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.back-to-top:hover { background: var(--accent2); transform: translateY(-3px) scale(1.05); box-shadow: 0 6px 24px rgba(139,92,246,.5); }
+.back-to-top:active { transform: translateY(0) scale(.95); }
+
+/* Toolbar filter */
+.filter-input {
+  padding:5px 10px; border:1px solid var(--border); border-radius:6px;
+  background:var(--bg); color:var(--text); font-size:12px; width:180px; outline:none;
+}
+.filter-input:focus { border-color:var(--accent); }
+
+/* Chart bars */
+.bar-chart { display:flex; flex-direction:column; gap:6px; }
+.bar-row { display:flex; align-items:center; gap:8px; }
+.bar-label { width:50px; font-size:11px; color:var(--text2); text-align:right; flex-shrink:0; }
+.bar-track { flex:1; height:22px; background:var(--border); border-radius:4px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:10px; font-weight:600; min-width:30px; }
+
+/* Settings panel */
+.settings-panel { display:none; }
+.settings-panel.show { display:block; }
+.settings-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { width:200px; min-width:200px; }
+  .stats-row { grid-template-columns:repeat(2, 1fr); }
+}
+
+/* Empty state */
+.empty { text-align:center; padding:40px; color:var(--text2); }
+.empty .icon { font-size:48px; margin-bottom:10px; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <img src="/assets/logo.svg" alt="DouTracker" style="width:36px;height:36px;border-radius:8px;" onerror="this.src='/assets/icon-pwa-128.png'">
+    <h1>DouTracker</h1>
+  </div>
+  <div class="sidebar-actions">
+    <button class="btn btn-primary" onclick="openScrapeModal()">+ 添加博主</button>
+  </div>
+  <div class="blogger-list" id="bloggerList"></div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-left">
+      <span style="font-size:12px;color:var(--text2)">仪表盘</span>
+      <span class="stat-chip">博主 <span class="val" id="statBloggers">0</span></span>
+      <span class="stat-chip">视频 <span class="val" id="statVideos">0</span></span>
+      <span class="stat-chip">总点赞 <span class="val" id="statLikes">0</span></span>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn btn-outline btn-sm" onclick="toggleSettings()">⚙ 设置</button>
+      <button class="btn btn-outline btn-sm" onclick="refreshData()">🔄 刷新</button>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+</main>
+
+<!-- Back to Top -->
+<button class="back-to-top" id="backToTopBtn" title="返回顶部">▲</button>
+
+<!-- Scrape Modal -->
+<div class="modal-overlay" id="scrapeModal" style="display:none">
+  <div class="modal">
+    <h3>添加抖音博主</h3>
+    <div class="form-group">
+      <label>抖音主页链接</label>
+      <input type="text" id="scrapeUrl" placeholder="https://www.douyin.com/user/MS4wLjABAAAA..." />
+    </div>
+    <div class="form-group">
+      <label>Cookie (可选, 留空使用已保存的)</label>
+      <textarea id="scrapeCookie" placeholder="ttwid=xxx; sessionid=xxx; ..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>最大抓取页数</label>
+      <input type="number" id="scrapePages" value="10" min="1" max="50" />
+    </div>
+    <div class="progress-bar" id="progressBar" style="display:none"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div style="font-size:12px;color:var(--text2);margin-top:6px;display:none" id="progressMsg"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeScrapeModal()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="startScrape()">开始抓取</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+// --- State ---
+let currentBlogger = null;
+let currentSort = 'create_time';
+let currentOrder = 'DESC';
+let bloggers = [];
+let videoCache = {};
+let _lastProgressSecUid = null;
+
+// --- Init ---
+async function init() {
+  await loadBloggers();
+  await loadDashboard();
+  // Poll progress if running
+  setInterval(checkProgress, 2000);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    let msg = '请求失败 (' + res.status + ')';
+    try { var b = await res.json(); msg = b.detail || b.message || msg; } catch(e) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+// --- Bloggers ---
+async function loadBloggers() {
+  try {
+    const data = await api('/api/bloggers');
+    bloggers = data.bloggers;
+    renderBloggerList();
+    if (currentBlogger) {
+      // refresh current
+      selectBlogger(currentBlogger);
+    }
+  } catch(e) { console.error(e); }
+}
+
+function renderBloggerList() {
+  const el = document.getElementById('bloggerList');
+  if (!bloggers.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📭</div><div style="font-size:12px">暂无博主</div></div>';
+    return;
+  }
+  el.innerHTML = bloggers.map(b => `
+    <div class="blogger-item ${currentBlogger === b.sec_uid ? 'active' : ''}"
+         onclick="selectBlogger('${b.sec_uid}')">
+      <img src="${b.avatar_thumb || ''}" onerror="this.style.display='none'" />
+      <div class="info">
+        <div class="name">${esc(b.nickname || '未知')}</div>
+        <div class="meta">粉丝 ${fmtNum(b.follower_count)} · 视频 ${b.local_video_count || b.aweme_count}</div>
+      </div>
+      <button class="del-btn" onclick="event.stopPropagation();deleteBlogger('${b.sec_uid}')" title="删除">×</button>
+    </div>
+  `).join('');
+}
+
+function selectBlogger(secUid) {
+  currentBlogger = secUid;
+  renderBloggerList();
+  renderBloggerDetail(secUid);
+}
+
+async function deleteBlogger(secUid) {
+  if (!confirm('确定删除该博主及其所有视频数据?')) return;
+  await api('/api/bloggers/' + secUid, { method: 'DELETE' });
+  if (currentBlogger === secUid) currentBlogger = null;
+  videoCache = {};
+  await loadBloggers();
+  document.getElementById('content').innerHTML = '';
+  await loadDashboard();
+}
+
+// --- Scrape ---
+let scrapeInterval = null;
+
+function openScrapeModal() {
+  document.getElementById('scrapeModal').style.display = 'flex';
+  document.getElementById('progressBar').style.display = 'none';
+  document.getElementById('progressMsg').style.display = 'none';
+}
+
+function closeScrapeModal() {
+  document.getElementById('scrapeModal').style.display = 'none';
+}
+
+async function startScrape() {
+  const url = document.getElementById('scrapeUrl').value.trim();
+  const cookie = document.getElementById('scrapeCookie').value.trim();
+  const maxPages = parseInt(document.getElementById('scrapePages').value) || 10;
+  if (!url) { alert('请输入抖音主页链接'); return; }
+
+  document.getElementById('progressBar').style.display = 'block';
+  document.getElementById('progressMsg').style.display = 'block';
+
+  try {
+    await api('/api/scrape', {
+      method: 'POST',
+      body: JSON.stringify({ url, cookie, max_pages: maxPages }),
+    });
+    scrapeInterval = setInterval(checkProgress, 1500);
+  } catch(e) {
+    alert('抓取启动失败: ' + e.message);
+    document.getElementById('progressBar').style.display = 'none';
+  }
+}
+
+async function checkProgress() {
+  try {
+    const p = await api('/api/progress');
+    const fill = document.getElementById('progressFill');
+    const msg = document.getElementById('progressMsg');
+
+    if (p.total_pages > 0) {
+      fill.style.width = (p.page / p.total_pages * 100) + '%';
+    }
+    msg.textContent = p.message;
+    msg.style.display = 'block';
+
+    if (p.status === 'done' || p.status === 'error') {
+      if (scrapeInterval) { clearInterval(scrapeInterval); scrapeInterval = null; }
+      setTimeout(() => {
+        closeScrapeModal();
+        fill.style.width = '0%';
+        document.getElementById('scrapeUrl').value = '';
+        loadBloggers().then(() => {
+          loadDashboard();
+          if (p.status === 'done' && p.sec_uid && p.sec_uid !== _lastProgressSecUid) {
+            _lastProgressSecUid = p.sec_uid;
+            var found = bloggers.find(function(b){ return b.sec_uid === p.sec_uid; });
+            if (found && found.local_video_count > 0) {
+              currentBlogger = p.sec_uid;
+              selectBlogger(p.sec_uid);
+            }
+          }
+        });
+      }, 1500);
+    }
+  } catch(e) {}
+}
+
+// --- Dashboard ---
+async function loadDashboard() {
+  try {
+    const d = await api('/api/dashboard');
+    document.getElementById('statBloggers').textContent = d.blogger_count;
+    document.getElementById('statVideos').textContent = d.total_videos;
+    document.getElementById('statLikes').textContent = fmtNum(d.total_likes);
+  } catch(e) {}
+}
+
+async function refreshData() {
+  if (currentBlogger) {
+    await loadBloggers();
+    renderBloggerDetail(currentBlogger);
+  } else {
+    await loadBloggers();
+  }
+  await loadDashboard();
+}
+
+// --- Blogger Detail ---
+async function renderBloggerDetail(secUid) {
+  try {
+    const detail = await api('/api/bloggers/' + secUid);
+    const videos = detail.videos || [];
+    const b = detail.blogger;
+    videoCache[secUid] = videos;
+
+    let html = '';
+
+    // Profile
+    html += `
+    <div class="profile-header" draggable="true" data-module="profile">
+      <img src="${b.avatar_medium || b.avatar_thumb || ''}" onerror="this.style.display='none'">
+      <div class="info">
+        <div class="nick">${esc(b.nickname || '未知')}</div>
+        ${b.custom_verify ? `<div class="verify">✅ ${esc(b.custom_verify)}</div>` : ''}
+        <div class="sig">${esc(b.signature || '')}</div>
+        <div class="uid">UID: ${b.uid || '--'} · sec_uid: ${secUid.slice(0,20)}...</div>
+      </div>
+    </div>`;
+
+    // Stats cards
+    html += `<div class="stats-row" data-module="stats">
+      <div class="stat-card"><div class="label">粉丝</div><div class="value c-accent">${fmtNum(b.follower_count)}</div></div>
+      <div class="stat-card"><div class="label">关注</div><div class="value">${fmtNum(b.following_count)}</div></div>
+      <div class="stat-card"><div class="label">总获赞</div><div class="value c-pink">${fmtNum(b.total_favorited)}</div></div>
+      <div class="stat-card"><div class="label">作品数</div><div class="value c-green">${fmtNum(b.aweme_count)}</div></div>
+      <div class="stat-card"><div class="label">已抓取</div><div class="value c-blue">${fmtNum(videos.length)}</div></div>
+      <div class="stat-card"><div class="label">动态数</div><div class="value">${fmtNum(b.dongtai_count || 0)}</div></div>
+    </div>`;
+
+    // Video stats aggregate
+    if (videos.length > 0) {
+      const totalLikes = videos.reduce((s, v) => s + (v.digg_count||0), 0);
+      const totalComments = videos.reduce((s, v) => s + (v.comment_count||0), 0);
+      const totalShares = videos.reduce((s, v) => s + (v.share_count||0), 0);
+      const totalCollects = videos.reduce((s, v) => s + (v.collect_count||0), 0);
+      const avgLikes = Math.round(totalLikes / videos.length);
+
+      html += `<div class="stats-row">
+        <div class="stat-card"><div class="label">总点赞(抓取)</div><div class="value c-pink">${fmtNum(totalLikes)}</div><div class="sub">均${fmtNum(avgLikes)}/条</div></div>
+        <div class="stat-card"><div class="label">总评论(抓取)</div><div class="value c-blue">${fmtNum(totalComments)}</div></div>
+        <div class="stat-card"><div class="label">总分享(抓取)</div><div class="value c-orange">${fmtNum(totalShares)}</div></div>
+        <div class="stat-card"><div class="label">总收藏(抓取)</div><div class="value c-green">${fmtNum(totalCollects)}</div></div>
+      </div>`;
+    }
+
+    // Bar chart for top 10 videos
+    if (videos.length > 0) {
+      const top10 = [...videos].sort((a, b) => (b.digg_count||0) - (a.digg_count||0)).slice(0, 10);
+      const maxLike = top10[0]?.digg_count || 1;
+      html += `<div class="card" data-module="charts">
+        <div class="card-header"><h3>📈 点赞 Top 10 视频</h3></div>
+        <div class="bar-chart">
+          ${top10.map(v => `
+            <div class="bar-row">
+              <div class="bar-label">${fmtNum(v.digg_count)}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max(3, v.digg_count/maxLike*100)}%;background:linear-gradient(90deg,var(--accent),var(--pink))">
+                  ${esc((v.desc||'(无文案)').slice(0, 30))}
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Video table
+    html += `<div class="card" data-module="videos">
+      <div class="card-header">
+        <h3>📹 视频列表 (${videos.length}条)</h3>
+        <div style="display:flex;gap:8px">
+          <input class="filter-input" id="videoFilter" placeholder="搜索文案..." oninput="filterVideos()" />
+          <button class="btn btn-outline btn-sm" onclick="exportData('${secUid}','json')">导出JSON</button>
+          <button class="btn btn-outline btn-sm" onclick="exportData('${secUid}','csv')">导出CSV</button>
+        </div>
+      </div>
+      <div class="video-table-wrapper">
+        <table class="video-table" id="videoTable">
+          <thead><tr>
+            <th onclick="sortVideos('digg_count')">👍点赞 <span class="sort-icon">${currentSort==='digg_count'?currentOrder==='DESC'?'▼':'▲':''}</span></th>
+            <th onclick="sortVideos('comment_count')">💬评论</th>
+            <th onclick="sortVideos('share_count')">↗分享</th>
+            <th onclick="sortVideos('collect_count')">⭐收藏</th>
+            <th onclick="sortVideos('create_time')">📅时间</th>
+            <th>文案</th>
+            <th>话题</th>
+            <th>BGM</th>
+          </tr></thead>
+          <tbody id="videoTbody"></tbody>
+        </table>
+      </div>
+    </div>`;
+
+    document.getElementById('content').innerHTML = html;
+    renderAllVideos();
+
+  } catch(e) {
+    if (e.message.includes('博主不存在') || e.message.includes('404')) {
+      document.getElementById('content').innerHTML = `
+        <div class="empty">
+          <div class="icon">🔍</div>
+          <div>博主数据未找到</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">正在自动刷新列表...</div>
+        </div>`;
+      currentBlogger = null;
+      await loadBloggers();
+      if (bloggers.length > 0) {
+        document.getElementById('content').innerHTML = '<div class="empty"><div class="icon">📋</div><div>请从左侧选择一个博主</div></div>';
+      }
+      renderBloggerList();
+    } else {
+      document.getElementById('content').innerHTML = `<div class="empty"><div>⚠️ ${esc(e.message)}</div><div style="font-size:12px;color:var(--text2);margin-top:8px"><a href="#" onclick="refreshData()">点击刷新</a></div></div>`;
+    }
+  }
+}
+
+// --- Video Table ---
+function getVideos() {
+  const all = videoCache[currentBlogger] || [];
+  const filter = document.getElementById('videoFilter')?.value?.toLowerCase() || '';
+  if (!filter) return all;
+  return all.filter(v => (v.desc||'').toLowerCase().includes(filter));
+}
+
+function renderAllVideos() {
+  const videos = getVideos();
+  const sorted = sortVideosData([...videos]);
+
+  document.getElementById('videoTbody').innerHTML = sorted.map(v => `
+    <tr>
+      <td class="num" style="color:var(--pink)">${fmtNum(v.digg_count)}</td>
+      <td class="num" style="color:var(--blue)">${fmtNum(v.comment_count)}</td>
+      <td class="num" style="color:var(--orange)">${fmtNum(v.share_count)}</td>
+      <td class="num" style="color:var(--green)">${fmtNum(v.collect_count)}</td>
+      <td style="font-size:11px;color:var(--text2)">${fmtTime(v.create_time)}</td>
+      <td class="desc-cell" title="${esc(v.desc||'')}">${esc((v.desc||'(无文案)').slice(0,40))}${(v.desc||'').length>40?'...':''}</td>
+      <td class="hashtags">${esc((v.hashtags||'').slice(0,30))}</td>
+      <td style="font-size:11px;color:var(--text2)">${esc((v.music_title||'').slice(0,20))}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text2)">无匹配结果</td></tr>';
+}
+
+function sortVideosData(videos) {
+  return videos.sort((a, b) => {
+    const va = a[currentSort] || 0;
+    const vb = b[currentSort] || 0;
+    return currentOrder === 'DESC' ? vb - va : va - vb;
+  });
+}
+
+function sortVideos(field) {
+  if (currentSort === field) {
+    currentOrder = currentOrder === 'DESC' ? 'ASC' : 'DESC';
+  } else {
+    currentSort = field;
+    currentOrder = 'DESC';
+  }
+  renderBloggerDetail(currentBlogger);
+}
+
+function filterVideos() {
+  renderAllVideos();
+}
+
+function exportData(secUid, fmt) {
+  window.open(API + '/api/export/' + secUid + '?fmt=' + fmt, '_blank');
+}
+
+// --- Settings ---
+let settingsVisible = false;
+function toggleSettings() {
+  settingsVisible = !settingsVisible;
+  if (settingsVisible) {
+    renderSettings();
+  } else {
+    document.getElementById('content').innerHTML = '';
+    if (currentBlogger) renderBloggerDetail(currentBlogger);
+  }
+}
+
+async function renderSettings() {
+  const s = await api('/api/settings');
+  document.getElementById('content').innerHTML = `
+    <h2 style="margin-bottom:14px">⚙ 设置</h2>
+    <div class="settings-grid">
+      <div class="card">
+        <div class="card-header"><h3>Cookie 管理</h3></div>
+        <div class="form-group">
+          <label>当前 Cookie ${s.cookie_exists ? '✅ 已保存' : '❌ 未设置'}</label>
+          <textarea id="settingsCookie" style="min-height:120px" placeholder="${s.cookie_exists ? 'Cookie 已保存 (留空不修改, 粘贴新值覆盖)' : '从浏览器 F12 → Application → Cookies → douyin.com 复制全部cookie'}"></textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">保存 Cookie</button>
+        <div style="font-size:11px;color:var(--text2);margin-top:8px">
+          获取方式: 浏览器登录 douyin.com → F12 → Application → Cookies → 复制所有cookie值
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>抓取设置</h3></div>
+        <div class="form-group">
+          <label>默认抓取页数 (每页约20条视频)</label>
+          <input type="number" id="settingsPages" value="${s.max_pages}" min="1" max="50" />
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">保存设置</button>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🔌 系统</h3></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">
+          <div>
+            <div style="font-size:13px;font-weight:500">开机自启</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px" id="autostartDesc">
+              ${s.autostart ? '已启用 - 系统启动时自动运行' : '未启用 - 需要手动启动'}
+            </div>
+          </div>
+          <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;cursor:pointer">
+            <input type="checkbox" id="autostartToggle" ${s.autostart ? 'checked' : ''}
+                   onchange="toggleAutostart()" style="opacity:0;width:0;height:0">
+            <span id="autostartTrack" style="position:absolute;top:0;left:0;right:0;bottom:0;background:${s.autostart ? 'var(--accent)' : 'var(--border)'};border-radius:26px;transition:.3s">
+              <span id="autostartKnob" style="position:absolute;left:${s.autostart ? '26px' : '3px'};bottom:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.3s"></span>
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function toggleAutostart() {
+  const r = await api('/api/autostart/toggle', { method: 'POST' });
+  document.getElementById('autostartDesc').textContent =
+    r.autostart ? '已启用 - 系统启动时自动运行' : '未启用 - 需要手动启动';
+  var track = document.getElementById('autostartTrack');
+  var knob = document.getElementById('autostartKnob');
+  var cb = document.getElementById('autostartToggle');
+  if (track) track.style.background = r.autostart ? 'var(--accent)' : 'var(--border)';
+  if (knob) knob.style.left = r.autostart ? '26px' : '3px';
+  if (cb) cb.checked = r.autostart;
+}
+
+async function saveSettings() {
+  var cookieEl = document.getElementById('settingsCookie');
+  var cookie = cookieEl ? cookieEl.value.trim() : '';
+  if (cookie === '已有Cookie(已隐藏)' || cookie === '已隐藏') {
+    cookie = '';
+  }
+  const pages = parseInt(document.getElementById('settingsPages')?.value) || 10;
+  await api('/api/settings', {
+    method: 'POST',
+    body: JSON.stringify({ cookie, max_pages: pages }),
+  });
+  alert('设置已保存' + (cookie ? '' : ' (Cookie 未保存)'));
+}
+
+// --- Helpers ---
+function esc(s) {
+  if (!s) return '';
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function fmtNum(n) {
+  if (n == null) return '0';
+  n = parseInt(n);
+  if (n >= 100000000) return (n/100000000).toFixed(1) + '亿';
+  if (n >= 10000) return (n/10000).toFixed(1) + '万';
+  return n.toLocaleString();
+}
+
+function fmtTime(ts) {
+  if (!ts) return '--';
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit' });
+}
+
+// --- Drag and drop layout ---
+let draggedEl = null;
+document.addEventListener('dragstart', function(e) {
+  const module = e.target.closest('[data-module]');
+  if (module) {
+    draggedEl = module;
+    e.dataTransfer.effectAllowed = 'move';
+    module.style.opacity = '0.5';
+  }
+});
+
+document.addEventListener('dragend', function(e) {
+  if (draggedEl) {
+    draggedEl.style.opacity = '1';
+    draggedEl = null;
+  }
+});
+
+document.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+});
+
+document.addEventListener('drop', function(e) {
+  e.preventDefault();
+  if (!draggedEl) return;
+  const target = e.target.closest('[data-module]');
+  if (target && target !== draggedEl) {
+    const parent = target.parentNode;
+    const afterTarget = target.nextSibling === draggedEl ? target : target;
+    parent.insertBefore(draggedEl, afterTarget.nextSibling || null);
+  }
+});
+
+// --- Start ---
+init();
+
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+// --- Back to Top ---
+(function() {
+  var btn = document.getElementById('backToTopBtn');
+  var main = document.querySelector('.main .content');
+  function toggle() {
+    var scrollTop = main ? main.scrollTop : window.scrollY;
+    btn.classList.toggle('visible', scrollTop > 400);
+  }
+  (main || window).addEventListener('scroll', toggle, { passive: true });
+  window.addEventListener('scroll', toggle, { passive: true });
+  toggle();
+
+  btn.addEventListener('click', function() {
+    if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+})();
+</script>
+</body>
+</html>
