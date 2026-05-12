@@ -234,6 +234,41 @@ def remove_blogger(sec_uid: str):
     return {"ok": True}
 
 
+@router.post("/bloggers/{sec_uid}/refresh")
+def refresh_blogger_data(sec_uid: str):
+    """Re-scrape a single blogger to get latest data"""
+    blogger = database.get_blogger_detail(sec_uid)
+    if not blogger:
+        raise HTTPException(404, "博主不存在")
+
+    share_url = (blogger["blogger"].get("share_url") or
+                 f"https://www.douyin.com/user/{sec_uid}")
+    cookie = database.get_settings().get("cookie", "")
+
+    try:
+        result = scraper.scrape_blogger(share_url, cookie, max_pages=10)
+        if "error" in result:
+            return {"ok": False, "message": result["error"]}
+
+        profile = result.get("profile", {})
+        videos = result.get("videos", [])
+
+        if profile:
+            database.save_blogger(profile, sec_uid, result.get("shared_url", share_url))
+        if videos:
+            database.save_videos(videos, sec_uid)
+
+        return {
+            "ok": True,
+            "nickname": profile.get("nickname", ""),
+            "follower_count": profile.get("follower_count", 0),
+            "aweme_count": profile.get("aweme_count", 0),
+            "video_count": len(videos),
+        }
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
 @router.get("/export/{sec_uid}")
 def export_data(sec_uid: str, fmt: str = Query("json")):
     detail = database.get_blogger_detail(sec_uid)

@@ -198,6 +198,25 @@ a { color:var(--accent); }
 .back-to-top:hover { background: var(--accent2); transform: translateY(-3px) scale(1.05); box-shadow: 0 6px 24px rgba(139,92,246,.5); }
 .back-to-top:active { transform: translateY(0) scale(.95); }
 
+/* Toast notification */
+.toast-container { position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+.toast {
+  background:var(--card); border:1px solid var(--border); border-radius:8px;
+  padding:12px 18px; font-size:13px; box-shadow:0 4px 20px rgba(0,0,0,.4);
+  animation: toast-in .3s ease; pointer-events:auto; display:flex; align-items:center;
+  gap:8px; max-width:380px;
+}
+.toast.success { border-color:var(--green); }
+.toast.error { border-color:var(--red); }
+.toast.info { border-color:var(--accent); }
+@keyframes toast-in { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+@keyframes toast-out { from { opacity:1; } to { opacity:0; transform:translateY(-10px); } }
+
+/* Refresh button spin */
+@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+.btn-refreshing .refresh-icon { animation:spin .8s linear infinite; display:inline-block; }
+.btn-refreshing { opacity:.7; pointer-events:none; }
+
 /* Toolbar filter */
 .filter-input {
   padding:5px 10px; border:1px solid var(--border); border-radius:6px;
@@ -230,6 +249,9 @@ a { color:var(--accent); }
 </head>
 <body>
 
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
 <!-- Sidebar -->
 <aside class="sidebar">
   <div class="sidebar-header">
@@ -253,7 +275,7 @@ a { color:var(--accent); }
     </div>
     <div class="toolbar-right">
       <button class="btn btn-outline btn-sm" onclick="toggleSettings()">⚙ 设置</button>
-      <button class="btn btn-outline btn-sm" onclick="refreshData()">🔄 刷新</button>
+      <button class="btn btn-outline btn-sm" onclick="refreshData()"><span class="refresh-icon">🔄</span> 刷新</button>
     </div>
   </div>
   <div class="content" id="content"></div>
@@ -302,8 +324,8 @@ let _lastProgressSecUid = null;
 async function init() {
   await loadBloggers();
   await loadDashboard();
-  // Poll progress if running
   setInterval(checkProgress, 2000);
+  scheduleDailyRefresh();
 }
 
 async function api(path, opts = {}) {
@@ -446,13 +468,89 @@ async function loadDashboard() {
 }
 
 async function refreshData() {
-  if (currentBlogger) {
-    await loadBloggers();
-    renderBloggerDetail(currentBlogger);
-  } else {
-    await loadBloggers();
+  var btn = document.querySelector('.btn-refreshing') || document.querySelector('[onclick="refreshData()"]');
+  var wasRefreshing = btn ? btn.classList.contains('btn-refreshing') : false;
+  if (wasRefreshing) return; // Prevent double-click
+  if (btn) btn.classList.add('btn-refreshing');
+
+  try {
+    if (!currentBlogger) {
+      // No blogger selected: just reload sidebar list
+      await loadBloggers();
+      await loadDashboard();
+      toast('info', '列表已刷新', '博主列表已更新');
+      return;
+    }
+
+    // Re-scrape from Douyin to get latest data
+    toast('info', '正在刷新...', '正在从抖音获取最新数据，请稍候');
+
+    var r = await api('/api/bloggers/' + currentBlogger + '/refresh', { method: 'POST' });
+
+    if (r.ok) {
+      // Reload display
+      await loadBloggers();
+      await loadDashboard();
+      renderBloggerDetail(currentBlogger);
+      toast('success', '刷新成功',
+        (r.nickname || '博主') + ' · 粉丝 ' + fmtNum(r.follower_count) +
+        ' · 视频 ' + (r.video_count || 0) + ' 条');
+    } else {
+      toast('error', '刷新失败', r.message || '无法获取最新数据');
+    }
+  } catch(e) {
+    toast('error', '网络错误', e.message || '刷新请求失败，请检查网络连接');
+    // Fallback: at least reload from DB
+    try {
+      await loadBloggers();
+      await loadDashboard();
+      if (currentBlogger) renderBloggerDetail(currentBlogger);
+    } catch(_) {}
+  } finally {
+    if (btn) btn.classList.remove('btn-refreshing');
   }
-  await loadDashboard();
+}
+
+// --- Toast Notifications ---
+function toast(type, title, msg) {
+  var container = document.getElementById('toastContainer');
+  var el = document.createElement('div');
+  var icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  el.className = 'toast ' + type;
+  el.innerHTML = '<span>' + (icons[type] || '') + '</span><div><b>' + title + '</b><div style="font-size:11px;color:var(--text2);margin-top:2px">' + (msg || '') + '</div></div>';
+  el.onclick = function() { el.style.animation = 'toast-out .3s ease forwards'; setTimeout(function() { el.remove(); }, 300); };
+  container.appendChild(el);
+  setTimeout(function() {
+    if (el.parentNode) {
+      el.style.animation = 'toast-out .3s ease forwards';
+      setTimeout(function() { if (el.parentNode) el.remove(); }, 300);
+    }
+  }, 4000);
+}
+
+// --- Daily Noon Auto-Refresh ---
+function scheduleDailyRefresh() {
+  function msUntilNextNoon() {
+    var now = new Date();
+    var noon = new Date(now);
+    noon.setHours(12, 0, 0, 0);
+    if (now >= noon) { noon.setDate(noon.getDate() + 1); }
+    return noon.getTime() - now.getTime();
+  }
+
+  function runAndReschedule() {
+    if (currentBlogger) {
+      toast('info', '定时刷新', '正在自动更新 ' + (new Date()).toLocaleTimeString('zh-CN'));
+      refreshData();
+    }
+    setTimeout(runAndReschedule, msUntilNextNoon());
+  }
+
+  var first = msUntilNextNoon();
+  var h = Math.floor(first / 3600000);
+  var m = Math.floor((first % 3600000) / 60000);
+  console.log('Daily refresh scheduled: ' + h + 'h ' + m + 'm from now (next noon)');
+  setTimeout(runAndReschedule, first);
 }
 
 // --- Blogger Detail ---
